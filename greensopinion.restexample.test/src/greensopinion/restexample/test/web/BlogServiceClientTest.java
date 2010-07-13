@@ -3,9 +3,11 @@ package greensopinion.restexample.test.web;
 import java.io.File;
 
 import junit.framework.TestResult;
+import greensopinion.restexample.service.BlogService;
 import greensopinion.restexample.test.service.BlogServiceTest;
 import greensopinion.restexample.test.util.TestUtil;
 import greensopinion.restexample.web.BlogServiceClient;
+import greensopinion.restexample.web.BlogServiceController;
 
 import org.junit.After;
 import org.junit.Before;
@@ -14,6 +16,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Test {@link BlogServiceClient}, verifies over-the-wire behaviour
+ * 
+ * @author David Green
+ * 
+ * @see BlogService
+ * @see BlogServiceClient
+ * @see BlogServiceController
+ */
 @RunWith(SpringJUnit4ClassRunner.class)
 @Transactional
 public class BlogServiceClientTest extends BlogServiceTest {

@@ -3,8 +3,15 @@ package greensopinion.restexample.test.util;
 import java.io.File;
 import java.net.URL;
 
+/**
+ * Utility for use in tests
+ * @author David Green
+ */
 public class TestUtil {
-
+	/**
+	 * Compute the filesystem folder for the root of the classpath for the given class.
+	 * @throws IllegalStateException if the path cannot be determined
+	 */
 	public static File computeClasspathRoot(Class<?> clazz) {
 		try {
 			URL url = clazz.getResource(clazz.getSimpleName()+".class");

@@ -16,7 +16,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * test that the mock factories are working as expected
+ * test that {@link MockFactory mock factories} are working as expected
  * 
  * @author David Green
  */

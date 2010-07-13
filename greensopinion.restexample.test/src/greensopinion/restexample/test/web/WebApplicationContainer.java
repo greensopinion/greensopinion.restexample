@@ -17,6 +17,21 @@ import org.springframework.context.ApplicationContext;
 
 import winstone.Launcher;
 
+/**
+ * A lightweight web container (webserver) that can be started/stopped within the context of a single unit test.
+ * Usage:
+ * <pre><code>
+ * 
+		webContainer.setWebRoot(computeWebRoot());
+		webContainer.start();
+		try {
+			URL url = new URL(webContainer.getBaseUrl(),"index.html");
+		} finally {
+			webContainer.stop();
+		}
+ * </code></pre>
+ * @author David Green
+ */
 public class WebApplicationContainer {
 
 	private static final Random random = new Random(System.currentTimeMillis());
@@ -30,6 +45,10 @@ public class WebApplicationContainer {
 
 	private int port;
 	
+	/**
+	 * start the webserver, guarantees that the webserver is started upon return.
+	 * @see #stop()
+	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public void start() {
 		if (winstoneLauncher != null) {
@@ -114,7 +133,10 @@ public class WebApplicationContainer {
 		}
 	}
 
-
+	/**
+	 * stop the web container
+	 * @see #start()
+	 */
 	public void stop() {
 		if (winstoneLauncher == null) {
 			throw new IllegalStateException();
@@ -123,6 +145,9 @@ public class WebApplicationContainer {
 		winstoneLauncher = null;
 	}
 	
+	/**
+	 * indicate if the container is started
+	 */
 	public boolean isStarted() {
 		return winstoneLauncher != null;
 	}
