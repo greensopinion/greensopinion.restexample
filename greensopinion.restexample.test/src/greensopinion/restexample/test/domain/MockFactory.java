@@ -11,6 +11,14 @@ import java.util.Map;
 import javax.persistence.Entity;
 import javax.persistence.EntityManager;
 
+/**
+ * A factory for domain objects that mocks their data.
+ * Example usage:
+ * <pre><code>
+ * Blog blog = MockFactory.on(Blog.class).create(entityManager);
+ * </code></pre>
+ * @author David Green
+ */
 public abstract class MockFactory<T> {
 
 	private static Map<Class<?>,MockFactory<?>> factories = new HashMap<Class<?>, MockFactory<?>>();
@@ -42,6 +50,12 @@ public abstract class MockFactory<T> {
 	}
 	
 
+	/**
+	 * Create several objects
+	 * @param entityManager the entity manager, or null if the mocked objects should not be persisted
+	 * @param count the number of objects to create
+	 * @return the created objects
+	 */
 	public List<T> create(EntityManager entityManager,int count) {
 		List<T> mocks = new ArrayList<T>(count);
 		for (int x = 0;x<count;++x) {
@@ -51,11 +65,17 @@ public abstract class MockFactory<T> {
 		return mocks;
 	}
 
+	/**
+	 * Create a single object
+	 * @param entityManager the entity manager, or null if the mocked object should not be persisted
+	 * @return the mocked object
+	 */
 	public T create(EntityManager entityManager) {
 		T mock;
 		try {
 			mock = domainClass.newInstance();
 		} catch (Exception e) {
+			// must have a default constructor
 			throw new IllegalStateException();
 		}
 		populate(++seed,mock);
