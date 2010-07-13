@@ -10,6 +10,11 @@ import javax.persistence.ManyToOne;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 
+/**
+ * an article, which has an author, title, content, and may optionally be published.
+ * 
+ * @author David Green
+ */
 @Entity
 public class Article extends AbstractEntity {
 	private String author;

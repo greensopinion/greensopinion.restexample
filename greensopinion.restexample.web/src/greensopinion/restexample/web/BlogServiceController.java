@@ -19,6 +19,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
+/**
+ * A {@link BlogService} controller, with mappings to provide a REST web service.
+ * 
+ * @author David Green
+ * @see BlogServiceClient
+ */
 @Controller
 @Qualifier("webservice")
 public class BlogServiceController implements BlogService {
@@ -27,20 +33,11 @@ public class BlogServiceController implements BlogService {
 	@Autowired
 	private BlogService service;
 
+	// note: we use POST instead of PUT, due to shortcomings in RestTemplate
 	@RequestMapping(value = "/blog", method = RequestMethod.POST)
 	@Override
 	public Blog createBlog(@RequestBody Blog blog) {
 		return shallowCopy(service.createBlog(blog));
-	}
-
-	private Blog shallowCopy(Blog blog) {
-		Blog copy = new Blog();
-		copy.setArticles(null);
-		copy.setCreated(blog.getCreated());
-		copy.setId(blog.getId());
-		copy.setModified(blog.getModified());
-		copy.setName(blog.getName());
-		return copy;
 	}
 
 	private DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
@@ -81,18 +78,6 @@ public class BlogServiceController implements BlogService {
 		return copies;
 	}
 
-	private Article shallowCopy(Article article) {
-		Article copy = new Article();
-		copy.setId(article.getId());
-		copy.setCreated(article.getCreated());
-		copy.setModified(article.getModified());
-		copy.setPublished(article.getPublished());
-		copy.setAuthor(article.getAuthor());
-		copy.setTitle(article.getTitle());
-		copy.setContent(article.getContent());
-		return copy;
-	}
-
 	@RequestMapping(value = "/blog/{blogId}/article", method = RequestMethod.POST)
 	@Override
 	public Article createArticle(@PathVariable("blogId") Long blogId, @RequestBody Article article) {
@@ -111,4 +96,25 @@ public class BlogServiceController implements BlogService {
 		return shallowCopy(service.getArticle(articleId));
 	}
 
+	private Blog shallowCopy(Blog blog) {
+		Blog copy = new Blog();
+		copy.setArticles(null);
+		copy.setCreated(blog.getCreated());
+		copy.setId(blog.getId());
+		copy.setModified(blog.getModified());
+		copy.setName(blog.getName());
+		return copy;
+	}
+
+	private Article shallowCopy(Article article) {
+		Article copy = new Article();
+		copy.setId(article.getId());
+		copy.setCreated(article.getCreated());
+		copy.setModified(article.getModified());
+		copy.setPublished(article.getPublished());
+		copy.setAuthor(article.getAuthor());
+		copy.setTitle(article.getTitle());
+		copy.setContent(article.getContent());
+		return copy;
+	}
 }

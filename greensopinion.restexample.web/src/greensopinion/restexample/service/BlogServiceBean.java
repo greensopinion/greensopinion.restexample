@@ -13,6 +13,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * A {@link BlogService} that uses JPA as its backing data store.
+ * 
+ * @author David Green
+ */
 @Service("blogService")
 @Transactional
 @Qualifier("main")

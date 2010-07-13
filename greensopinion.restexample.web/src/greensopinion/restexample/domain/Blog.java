@@ -9,6 +9,11 @@ import javax.persistence.FetchType;
 import javax.persistence.OneToMany;
 import javax.persistence.OrderBy;
 
+/**
+ * A blog (web log), which is a named collection of articles.
+ * 
+ * @author David Green
+ */
 @Entity
 public class Blog extends AbstractEntity {
 	private String name;

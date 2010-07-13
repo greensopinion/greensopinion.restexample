@@ -16,6 +16,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+/**
+ * A REST web service client for accessing a {@link BlogService}
+ * 
+ * @author David Green
+ */
 @Service
 @Qualifier("client")
 public class BlogServiceClient implements BlogService {
