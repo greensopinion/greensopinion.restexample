@@ -16,7 +16,7 @@
 	<context:annotation-config/>
 	
     <bean id="blogServiceController" class="greensopinion.restexample.web.BlogServiceController"/>
-	<alias name="blogServiceController" alias="/blog*"/>
+	<alias name="blogServiceController" alias="/api*"/>
      
    
 	

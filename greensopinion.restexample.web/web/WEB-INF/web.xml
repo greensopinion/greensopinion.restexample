@@ -50,7 +50,7 @@
 	</servlet>
 	<servlet-mapping>
 		<servlet-name>blog-service</servlet-name>
-		<url-pattern>/blog/*</url-pattern>
+		<url-pattern>/api/*</url-pattern>
 	</servlet-mapping>
   <welcome-file-list>
     <welcome-file>index.html</welcome-file>

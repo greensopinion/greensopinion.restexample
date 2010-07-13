@@ -39,7 +39,7 @@ public class BlogServiceClientTest extends BlogServiceTest {
 		webContainer.setWebRoot(computeWebRoot());
 		webContainer.start();
 
-		blogServiceClient.setBaseUrl(webContainer.getBaseUrl()+"blog");
+		blogServiceClient.setBaseUrl(webContainer.getBaseUrl()+"api");
 		// use the client instead of the service directly
 		service = blogServiceClient;
 	}
