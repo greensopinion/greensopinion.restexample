@@ -16,43 +16,9 @@
 	<context:component-scan base-package="greensopinion.restexample">
 		<context:exclude-filter expression=".*_Roo_.*" type="regex"/>
 		<context:exclude-filter expression="org.springframework.stereotype.Controller" type="annotation"/>
+		<context:exclude-filter expression=".*BlogServiceClient" type="regex"/>
 	</context:component-scan>
 
-	<bean
-		class="org.springframework.web.servlet.view.ContentNegotiatingViewResolver"
-		p:order="1">
-		<property name="mediaTypes">
-			<map>
-				<!-- entry key="xml" value="application/xml"/ -->
-				<entry key="json" value="application/json" />
-			</map>
-		</property>
-		<property name="viewResolvers">
-			<list>
-				<bean class="org.springframework.web.servlet.view.BeanNameViewResolver" />
-			</list>
-		</property>
-		<property name="defaultViews">
-			<list>
-				<!-- bean class="org.springframework.web.servlet.view.xml.MarshallingView" 
-					p:modelKey="model"> <property name="marshaller"> <bean class="org.springframework.oxm.castor.CastorMarshaller" 
-					p:suppressXsiType="true"/> </property> </bean -->
-				<bean
-					class="org.springframework.web.servlet.view.json.MappingJacksonJsonView" />
-			</list>
-		</property>
-	</bean>
-
-	<bean id="jacksonMessageConverter"
-		class="org.springframework.http.converter.json.MappingJacksonHttpMessageConverter" />
-	<bean
-		class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">
-		<property name="messageConverters">
-			<list>
-				<ref bean="jacksonMessageConverter" />
-			</list>
-		</property>
-	</bean>
 	
 	<bean class="org.apache.commons.dbcp.BasicDataSource"
 		destroy-method="close" id="dataSource">
