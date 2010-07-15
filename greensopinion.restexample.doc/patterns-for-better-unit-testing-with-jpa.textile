@@ -4,7 +4,7 @@ Over the years I've run across many projects, which tend to fall into one of two
 
 h2. Setup and Speed
 
-Ideally we want to enable running tests with zero setup.  Data-intensive applications need a database, which are notoriously hard to configure and setup.  We'll use a database for our tests, but instead of connecting to an external one the database will start up and run as part of the unit test.  This gives us the following:
+Configuration, setup and maintenance of environments creates a significant barrier to a well-exercised and maintained test suite.  Ideally we want to enable running tests with zero setup.  Data-intensive applications need a database, which are notoriously hard to configure and setup.  We'll use a database for our tests, but instead of connecting to an external one the database will start up and run as part of the unit test.  This gives us the following:
 * zero setup: no installation, no shared machine, no maintenance, no JDBC urls, no passwords  
 * in-memory and fast
 * can run anywhere, even when not on a network
@@ -21,7 +21,8 @@ bc.
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <persistence xmlns="http://java.sun.com/xml/ns/persistence" 
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0" 
-	xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd">
+	xsi:schemaLocation="http://java.sun.com/xml/ns/persistence
+	 http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd">
     <persistence-unit name="blogDomain" transaction-type="RESOURCE_LOCAL">
         <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
        	... snip ...
@@ -84,7 +85,8 @@ public abstract class MockFactory<T> {
 	public static <T> MockFactory<T> on(Class<T> domainClass) {
 		MockFactory<?> factory = factories.get(domainClass);
 		if (factory == null) {
-			throw new IllegalStateException("Did you forget to register a mock factory for "+domainClass.getClass().getName()+"?");
+			throw new IllegalStateException(
+				"Did you forget to register a mock factory for "+domainClass.getClass().getName()+"?");
 		}
 		return (MockFactory<T>) factory;
 	}
@@ -169,9 +171,9 @@ public abstract class MockFactory<T> {
 	}
 }
 
-p. This implementation uses static methods and a static initializer.  It's not very Spring-like; if you prefer you could get rid of all the statics and instead have Spring inject (autowire) your mock factories into your test classes.
+p. This implementation uses static methods and a static initializer.  It's not very Spring-like.  If you prefer you could get rid of all the statics and instead have Spring inject (autowire) your mock factories into your test classes.
 
-In our implementation we use an integer @seed@ to help us produce values that vary.  This implementation is fairly trivial, however implementations could use data dictionaries to source data.  Such mock factories should populate enough values that the mocked domain object can be persisted: all not-null properties should have values.  To ensure that this is true over the lifespan of our project, it's important to have a test:
+In our implementation we use an integer @seed@ to help us produce values that vary.  This implementation is fairly trivial, however if needed we could apply more advanced techniques such as using data dictionaries to source data.  Such mock factories should populate enough values that the mocked domain object can be persisted: all not-null properties should have values.  To ensure that this is true over the lifespan of our project, it's important to have a test:
 
 bc.. 
 /**
@@ -237,4 +239,4 @@ We've seen how we can make unit testing easy with a few simple patterns:
 * roll back transactions after each test
 By employing these simple techniques, tests are easy to write and run.  Your team will get addicted to thorough test coverage as the number of tests being run increases and provides tangible feedback of their progress.
 
-In my next article I'll post full source code and show how these techniques can be taken a step further in testing Spring REST web services.
+In my next article I'll post complete working source code and show how these techniques can be taken a step further in testing Spring REST web services.
