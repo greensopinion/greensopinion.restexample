@@ -1,0 +1,253 @@
+h1. Testing REST Web Services with JPA and Spring
+
+REST Web Services can be particularly difficult to test, with the need for networking, a web container, multiple threads and transaction management creating extra complexity beyond your standard unit test.  In this article I demonstrate patterns designed to address this complexity while enabling complete testing of your REST Web Service stack.
+
+The ideal web service unit test will use the same principles discussed in my "previous article":http://greensopinion.blogspot.com/2010/07/patterns-for-better-unit-testing-with.html:
+# clean database with mocked data so that we can reliably test specific scenarios
+# rollback to avoid side-effects after our test
+# in-memory database so that no environment setup is required
+In addition, we'll need to run a web container for our unit test.  To maintain a zero-setup test environment, we'll have our unit test start a web container for the purpose of running our web service.   By having each test start and stop the web container, tests become very simple to run, and we're guaranteed that our tests will have a clean environment with no external dependencies.
+
+h2. Web Container
+
+Normally starting a web container is difficult to do in a unit test, and container startup time can be a problem -- however with the right choice of web container we can overcome these problems.  "Winstone":http://winstone.sourceforge.net/ is a small, fast web container that is designed to be embedded in Java programs.  By using Winstone, we'll be able to start and stop the web container as part of our unit test setup and tear-down with relative ease.
+
+Starting Winstone is as simple as this:
+
+bc.. 
+	Map args = new HashMap();
+	args.put("webroot", pathToWebRoot);
+	args.put("httpPort", String.valueOf(port));
+	Launcher.initLogger(args);
+
+	// start winstone
+	winstoneLauncher = new Launcher(args);
+
+p.  Winstone only takes a couple of seconds to start up.  Shutting it down is as simple as this:
+
+bc. 
+	if (winstoneLauncher.isRunning()) {
+		winstoneLauncher.shutdown();
+	}
+
+To hide the details of winstone from our unit tests, we can create a class @WebApplicationContainer@, which is responsible for starting choosing a port, starting/stopping Winstone, and providing a base URL for our tests:
+
+bc.. 
+public class WebApplicationContainer {
+
+	private static final Random random = new Random(System.currentTimeMillis());
+
+	private Launcher winstoneLauncher;
+
+	private File webRoot;
+
+	private int port;
+	
+	/**
+	 * start the webserver, guarantees that the webserver is started upon return.
+	 * @see #stop()
+	 */
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	public void start() {
+		if (winstoneLauncher != null) {
+			throw new IllegalStateException("already started");
+		}
+		port = findAvailablePort();
+		
+		
+		Logger log = Logger.getLogger(WebApplicationContainer.class.getName());
+		log.fine("Starting web container on "+getBaseUrl());
+		
+		Map args = new HashMap();
+		try {
+			args.put("ajp13Port", "-1");
+			args.put("useJasper", "false");
+			args.put("webroot", webRoot.getAbsolutePath());
+			args.put("httpPort", String.valueOf(port));
+			Launcher.initLogger(args);
+
+			// start winstone
+			winstoneLauncher = new Launcher(args);
+
+			// wait for Winstone to finish starting up
+			// we do that by attempting to connect via socket
+			final int maxRetries = 150;
+			for (int x = 0; x < maxRetries; ++x) {
+				if (testForSuccessfulStartup()) {
+					break;
+				}
+				if (x == maxRetries - 1) {
+					throw new IllegalStateException(String.format("Connection to localhost:%s failed.  Did the web container start up successfully?"));
+				}
+				// wait and then try again
+				Thread.sleep(100L);
+			}
+			Logger.getLogger(WebApplicationContainer.class.getName()).info("Started web container at "+getBaseUrl());
+		} catch (Exception e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
+	private int findAvailablePort() {
+		...
+	}
+	
+	private boolean testForSuccessfulStartup() {
+		// test to see if the web container is listening on the address/port combo
+		try {
+			Socket socket = SocketFactory.getDefault().createSocket("localhost", port);
+			socket.close();
+			return true;
+		} catch (UnknownHostException e) {
+			throw new IllegalStateException(e);
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
+	/**
+	 * stop the web container
+	 * @see #start()
+	 */
+	public void stop() {
+		if (winstoneLauncher == null) {
+			throw new IllegalStateException();
+		}
+		
+		winstoneLauncher.shutdown();
+		winstoneLauncher = null;
+	}
+
+	public String getBaseUrl() {
+		return String.format("http://localhost:%s/", port);
+	}
+	...
+}
+
+h2. REST Service Unit Test
+
+p. A complete test for our web service ends up looking like this:
+
+bc.. 
+@RunWith(SpringJUnit4ClassRunner.class)
+@Transactional
+public class BlogServiceClientTest extends BlogServiceTest {
+	@Autowired
+	private BlogServiceClient blogServiceClient;
+
+	@Autowired
+	private WebApplicationContainer webContainer;
+
+	@Before
+	public void before() {
+		webContainer.setWebRoot(computeWebRoot());
+		webContainer.start();
+
+		blogServiceClient.setBaseUrl(webContainer.getBaseUrl()+"api");
+		// use the client instead of the service directly
+		service = blogServiceClient;
+	}
+
+	@After
+	public void after() {
+		if (webContainer.isStarted()) {
+			webContainer.stop();
+		}
+	}
+}
+
+p. @BlogServiceClient@ is an implementation of @BlogService@ (our service interface) based on Spring's @RestTemplate@: it's a REST client for our service.
+
+You might be thinking "where are the ==<code>@Test</code>== methods?".  The beauty of our web service test is that it extends our service test: all of the test methods we were running before using direct method calls are now also run over our web service protocol.  By using inheritance, other than setup of our web service there's nothing else to do.  In other words, our service tests are run twice: once using Java method calls, and again over-the-wire using our web service.  This ensures that we see consistent behaviour in both modes of execution.
+
+h2. Transaction Management and JPA
+
+Now that we've got a way to start our web service and run tests we're done, right?  Not quite: we still need to manage transactions and our test data.  This is somewhat more complicated with our web service: we want our unit test to have the following qualities:
+* clean database on startup
+* run in a transaction that rolls back after the test
+* mocks all of its own data
+Employing the techniques we've already established in "Patterns for Better Unit Testing with JPA":http://greensopinion.blogspot.com/2010/07/patterns-for-better-unit-testing-with.html helps, but is not quite enough.  
+
+Recall that we're invoking our service that's running in a web container.  The web container services incoming HTTP requests with threads in a thread pool.  Our service is pretty much guaranteed to be running on a thread independant from our unit test thread.  As a result it will be running in it's own transaction context.  There are two problems that arise from this:
+* our service won't be able to see the data we've mocked up in our test
+* our service method will commit its transaction
+Both of these things are undesirable.  To overcome this problem we'll apply a little trickery: we'll provide an entity manager that is shared by both the test thread and the web container thread servicing our HTTP requests, and we'll prevent any commit or rollback from occurring on that entity manager while it's in use in a unit test.  We do this by wrapping the entity manager factory in our test environment:
+
+bc. 
+	<bean class="greensopinion.restexample.test.jpa.TestEntityManagerFactory" 
+		id="blogDomain">
+		<property name="delegate">
+			<bean
+				class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+				<property name="dataSource" ref="dataSource" />
+				<property name="persistenceXmlLocation" value="classpath*:/persistence-test.xml"/>
+			</bean>
+		</property>
+	</bean>
+
+Our @TestEntityManagerFactory@ employs the standard delegate pattern, with the exception that it changes the default behaviour of @createEntityManager()@:
+
+bc. 
+	public EntityManager createEntityManager() {
+		if (theEntityManager == null) {
+			theEntityManager = delegate.createEntityManager();
+		}
+		return new TestEntityManager(theEntityManager);
+	}
+
+It creates and returns a singleton entity manager instance.  This allows us to share a single entity manager between our unit test and the web container.  We also wrap the entity manager so that we can control it's lifecycle (we prevent @close()@) and it's transaction (we prevent @commit()@ and @rollback()@).
+
+While we know that the @EntityManager@ is not thread safe, it's okay to share it between threads providing that no two threads access it _at the same time_.  Since our REST client will block on any calls to the server, we're not at risk of concurrent access.
+
+h2. Source Code
+
+Complete, working source code demonstrating these patterns and others is available on GitHub:
+
+"http://github.com/dgreen99/greensopinion.restexample":http://github.com/dgreen99/greensopinion.restexample
+
+The source contains two Eclipse projects: one for the web application, and one for unit tests.  The unit tests all run and pass, and the web application can be started and deployed with a MySQL database.
+
+h3. Service Patterns
+
+The service is split into the following:
+* Service interface - defines the service contract
+* Service bean - implements the service over JPA
+* Service controller - exposes the service using Spring REST
+* Service client - implements client end of the REST service, used in our tests
+This gives us a good separation of concerns, and client code need not always know if it's calling an in-process or out-of-process service.
+
+JPA domain objects are exposed by the service interface.  This helps in a few ways:
+* The service is usable in other parts of the application that deal with the domain
+* It helps to reduce the amount of code that must be written
+However it has drawbacks:
+* It exposes the design of our domain, limiting our ability to change it in the future
+* Changes to the domain may inadvertently break the service interface
+* The service controller must be careful to expose shallow copies only
+This approach may be feasible for some projects, however others may find that they must create transfer objects to expose data via the service interface without exposing their domain implementation details.
+
+h3. Missing Functionality
+
+Notably this sample code is missing two crucial aspects of a normal web application:
+
+# Exception handling should be built-in to our service controller so that errors can be propagated gracefully.
+# Data validation is not performed by the service bean.
+
+These aspects of the sample application are left unimplemented.
+
+h2. Summary
+
+Testing REST web services can be easy by following the following patterns:
+* implement a web service client to exercise your service from unit tests
+* run the web service in your tests with a lightweight embedded web container
+* share the entity manager and transaction context between the service and test
+By applying these straight-forward techniques it's possible to overcome the complexity inherent in testing a web service, enabling better coverage and higher quality applications.
+
+h2. References
+
+Technologies used in this project:
+
+* REST services are implemented using "Spring REST":http://www.springsource.org/ and "Jackson":http://jackson.codehaus.org/
+* "EclipseLink":http://www.eclipse.org/eclipselink/ is used as a JPA provider
+* "JUnit":http://junit.org is used for unit tests
+* "Hypersonic":http://hsqldb.org is used for an in-memory database
+* "Winstone":http://winstone.sourceforge.net/ is used for an embedded web container
