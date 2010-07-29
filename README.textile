@@ -1,6 +1,4 @@
-A sample Spring REST application demonstrating unit testing techniques with JPA.
+A sample Spring REST application demonstrating unit testing techniques with JPA, supporting the following articles:
 
-Related articles:
-
-"Patterns for Better Unit Testing with JPA":http://greensopinion.blogspot.com/2010/07/patterns-for-better-unit-testing-with.html
-"Testing REST Web Services with JPA and Spring":http://greensopinion.blogspot.com/2010/07/testing-rest-web-services-with-jpa-and.html
+* "Patterns for Better Unit Testing with JPA":http://greensopinion.blogspot.com/2010/07/patterns-for-better-unit-testing-with.html
+* "Testing REST Web Services with JPA and Spring":http://greensopinion.blogspot.com/2010/07/testing-rest-web-services-with-jpa-and.html
