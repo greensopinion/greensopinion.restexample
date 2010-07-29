@@ -1,0 +1,190 @@
+<?xml version='1.0' encoding='utf-8' ?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/></head><body><h1 id="PatternsforBetterUnitTestingWithJPA">Patterns for Better Unit Testing With JPA</h1><p>Over the years I&#8217;ve run across many projects, which tend to fall into one of two categories: those projects that have great  confidence, energy and momentum, running hundreds (or thousands) of unit tests dozens of times every day; and those projects where the effort of writing and running unit tests is high enough that tests aren&#8217;t maintained and as a result no one on the team really knows if their software works.  So how do we get our project into the first category?  Below I highlight a few patterns and practices that significantly lower the bar to creating a solid test suite, enabling your team to adopt a practice and culture of complete test coverage.</p><h2 id="SetupandSpeed">Setup and Speed</h2><p>Configuration, setup and maintenance of environments creates a significant barrier to a well-exercised and maintained test suite.  Ideally we want to enable running tests with zero setup.  Data-intensive applications need a database, which are notoriously hard to configure and setup.  We&#8217;ll use a database for our tests, but instead of connecting to an external one the database will start up and run as part of the unit test.  This gives us the following:</p><ul><li>zero setup: no installation, no shared machine, no maintenance, no JDBC urls, no passwords  </li><li>in-memory and fast</li><li>can run anywhere, even when not on a network</li><li>clean, with no rogue data that could affect our tests</li><li>no deadlocks</li></ul><p>My first reaction when I saw this approach in use was &#8220;how can tests be meaningful if they're not run on the same database software that is used in production&#8221;?  The answer is two-sided.  We <em>should</em> be running these tests on the same database software.  In fact, I encourage you to do that &#8212; on your continuous integration build server.  The tests are meaningful in that they can make assertions and exercise your code.  Database platform-specific issues can be flushed out on the build server, which can run these same tests using a different configuration.</p><p>To set this up I recommend using <a href="http://db.apache.org/derby/">Apache Derby</a> or <a href="http://hsqldb.org">Hypersonic</a>.  Here&#8217;s how it&#8217;s done with Hypersonic and Eclipselink as our JPA provider:</p><ol><li>add hsqldb.jar to the test project classpath (this is for Hypersonic)</li><li>configure your JDBC connection to use an in-memory database URL as follows: <code>jdbc:hsqldb:mem:tests</code></li><li>configure your persistence.xml with the right SQL dialect.  For Eclipselink this is done by setting <code>eclipselink.target-database</code> to <code>HSQL</code> as follows:</li></ol><pre><code>&lt;?xml version="1.0" encoding="UTF-8" standalone="no"?&gt;
+&lt;persistence xmlns="http://java.sun.com/xml/ns/persistence" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.0" 
+	xsi:schemaLocation="http://java.sun.com/xml/ns/persistence
+	 http://java.sun.com/xml/ns/persistence/persistence_1_0.xsd"&gt;
+    &lt;persistence-unit name="blogDomain" transaction-type="RESOURCE_LOCAL"&gt;
+        &lt;provider&gt;org.eclipse.persistence.jpa.PersistenceProvider&lt;/provider&gt;
+       	... snip ...
+        &lt;properties&gt;
+            &lt;property name="eclipselink.target-database" value="HSQL"/&gt;
+            &lt;property name="eclipselink.ddl-generation" value="create-tables"/&gt;
+            &lt;property name="eclipselink.ddl-generation.output-mode" value="database"/&gt;
+            &lt;property name="eclipselink.weaving" value="false"/&gt;
+            &lt;property name="eclipselink.logging.level" value="INFO"/&gt;
+        &lt;/properties&gt;
+    &lt;/persistence-unit&gt;
+&lt;/persistence&gt;
+</code></pre><p>With this configuration the test suite will create a new in-memory database every time it&#8217;s run, and Eclipselink will create the necessary tables to persist our data.  We&#8217;ve managed to eliminate the need for any kind of setup or external database to run our tests.  That&#8217;s great, but now we&#8217;ve got an empty database, where does our data come from?</p><h2 id="TestData">Test Data</h2><p>Data-intensive applications need data for their tests &#8212; that&#8217;s a given.  For our tests to run reliably and check specific scenarios every time, we need the data used by each test case to be the same every time tests are run.  The best way to do this is to have our tests mock up the data.  Mocking data can be cumbersome, however that can be alleviated by using mock factories for our domain objects.  Mock factories populate domain objects with values such that they&#8217;re ready to use as-is.  Where needed, tests can alter the state of domain objects to create the desired scenario.  Here&#8217;s an example:</p><pre><code>	@Test
+	public void testUpdateBlog() {
+		Blog blog = MockFactory.on(Blog.class).create(entityManager);
+		entityManager.flush();
+		entityManager.clear();
+		
+		blog.setName(blog.getName()+"2");
+		
+		Blog updatedBlog = service.updateBlog(blog);
+		assertNotNull(updatedBlog);
+		assertNotSame(updatedBlog,blog);
+		assertEquals(blog.getName(),updatedBlog.getName());
+		assertEquals(blog.getId(),updatedBlog.getId());
+	}
+	
+</code></pre><p>In this example the test verifies that the <code>Blog</code> entity is properly updated by the service.  Notice that the test didn&#8217;t have to populate the <code>blog</code> object before persisting it: all of the required values were filled in by the <code>MockFactory</code>.</p><p>For this to work, we&#8217;ll need a <code>MockFactory</code> implementation.  This is what ours looks like:</p><pre><code>/**
+ * A factory for domain objects that mocks their data.
+ * Example usage:
+ * &lt;pre&gt;&lt;code&gt;
+ * Blog blog = MockFactory.on(Blog.class).create(entityManager);
+ * &lt;/code&gt;&lt;/pre&gt;
+ * @author David Green
+ */
+public abstract class MockFactory&lt;T&gt; {
+
+	private static Map&lt;Class&lt;?&gt;,MockFactory&lt;?&gt;&gt; factories = new HashMap&lt;Class&lt;?&gt;, MockFactory&lt;?&gt;&gt;();
+	static {
+		register(new MockBlogFactory());
+		register(new MockArticleFactory());
+	}
+	private static void register(MockFactory&lt;?&gt; mockFactory) {
+		factories.put(mockFactory.domainClass,mockFactory);
+	}
+	@SuppressWarnings("unchecked")
+	public static &lt;T&gt; MockFactory&lt;T&gt; on(Class&lt;T&gt; domainClass) {
+		MockFactory&lt;?&gt; factory = factories.get(domainClass);
+		if (factory == null) {
+			throw new IllegalStateException(
+				"Did you forget to register a mock factory for "+domainClass.getClass().getName()+"?");
+		}
+		return (MockFactory&lt;T&gt;) factory;
+	}
+	
+	private final Class&lt;T&gt; domainClass;
+
+	private int seed;
+	
+	protected MockFactory(Class&lt;T&gt; domainClass) {
+		if (domainClass.getAnnotation(Entity.class) == null) {
+			throw new IllegalArgumentException();
+		}
+		this.domainClass = domainClass;
+	}
+
+	/**
+	 * Create several objects
+	 * @param entityManager the entity manager, or null if the mocked objects should not be persisted
+	 * @param count the number of objects to create
+	 * @return the created objects
+	 */
+	public List&lt;T&gt; create(EntityManager entityManager,int count) {
+		List&lt;T&gt; mocks = new ArrayList&lt;T&gt;(count);
+		for (int x = 0;x&lt;count;++x) {
+			T t = create(entityManager);
+			mocks.add(t);
+		}
+		return mocks;
+	}
+
+	/**
+	 * Create a single object
+	 * @param entityManager the entity manager, or null if the mocked object should not be persisted
+	 * @return the mocked object
+	 */
+	public T create(EntityManager entityManager) {
+		T mock;
+		try {
+			mock = domainClass.newInstance();
+		} catch (Exception e) {
+			// must have a default constructor
+			throw new IllegalStateException();
+		}
+		populate(++seed,mock);
+		if (entityManager != null) {
+			entityManager.persist(mock);
+		}
+		return mock;
+	}
+
+	/**
+	 * Populate the given domain object with data
+	 * @param seed a seed that may be used to create data
+	 * @param mock the domain object to populate
+	 */
+	protected abstract void populate(int seed, T mock);
+	
+
+	private static class MockBlogFactory extends MockFactory&lt;Blog&gt; {
+		public MockBlogFactory() {
+			super(Blog.class);
+		}
+		
+		@Override
+		protected void populate(int seed, Blog mock) {
+			mock.setName("Blog "+seed);
+		}
+	}
+
+	private static class MockArticleFactory extends MockFactory&lt;Article&gt; {
+		
+		public MockArticleFactory() {
+			super(Article.class);
+		}
+		
+		@Override
+		protected void populate(int seed, Article mock) {
+			mock.setAuthor("First Last");
+			mock.setTitle("Article "+seed);
+			mock.setContent("article "+seed+" content");
+		}
+	}
+}
+
+</code></pre><p>This implementation uses static methods and a static initializer.  It&#8217;s not very Spring-like.  If you prefer you could get rid of all the statics and instead have Spring inject (autowire) your mock factories into your test classes.</p><p>In our implementation we use an integer <code>seed</code> to help us produce values that vary.  This implementation is fairly trivial, however if needed we could apply more advanced techniques such as using data dictionaries to source data.  Such mock factories should populate enough values that the mocked domain object can be persisted: all not-null properties should have values.  To ensure that this is true over the lifespan of our project, it&#8217;s important to have a test:</p><pre><code>/**
+ * test that {@link MockFactory mock factories} are working as expected
+ * 
+ * @author David Green
+ */
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration( { "/applicationContext-test.xml" })
+@Transactional
+public class MockFactoryTest {
+
+	@PersistenceContext
+	private EntityManager entityManager;
+
+	@Test
+	public void testCreateBlog() {
+		Blog blog = MockFactory.on(Blog.class).create(entityManager);
+		assertNotNull(blog);
+		assertNotNull(blog.getName());
+		entityAssertions(blog);
+		entityManager.flush();
+	}
+	@Test
+	public void testCreateArticle() {
+		Blog blog = MockFactory.on(Blog.class).create(entityManager);
+		Article article = MockFactory.on(Article.class).create(null);
+		article.setBlog(blog);
+		entityManager.persist(article);
+		assertNotNull(article);
+		assertNotNull(article.getTitle());
+		assertNotNull(article.getContent());
+		entityAssertions(article);
+		entityManager.flush();
+	}
+	private void entityAssertions(AbstractEntity entity) {
+		assertNotNull(entity.getId());
+		assertNotNull(entity.getCreated());
+		assertNotNull(entity.getModified());
+	}
+}
+
+</code></pre><p>The key behind this approach is that each test mocks its own data.  Where data models are signifcantly more complex, utility functions can use these mock factories to create common scenarios.</p><p>Now that we&#8217;ve got an easy way to produce data in our tests, how do we eliminate potential for side-effects between tests?  That part is easy: we ensure that transactions are rolled back after every test.  In our example we&#8217;re using Spring to run our tests via <code>SpringJUnit4ClassRunner</code>.  Its default behaviour is to roll back after each test is run, however if you&#8217;re not using Spring you should have something like this in an abstract test case class:</p><pre><code>	/**
+	 * Overriding methods should call super.
+	 */ 
+	@After
+	public void after() {
+		if (entityManager.getTransaction().isActive()) {
+			entityManager.getTransaction().rollback();
+		}
+	}
+</code></pre><h2 id="Summary">Summary</h2><p>We&#8217;ve seen how we can make unit testing easy with a few simple patterns:</p><ul><li>in-memory database</li><li>mocked data</li><li>roll back transactions after each test</li></ul><p>By employing these simple techniques, tests are easy to write and run.  Your team will get addicted to thorough test coverage as the number of tests being run increases and provides tangible feedback of their progress.</p><p>In my next article I&#8217;ll post complete working source code and show how these techniques can be taken a step further in testing Spring REST web services.</p></body></html>
