@@ -1,12 +1,12 @@
 h1. Testing REST Web Services with JPA and Spring
 
-REST Web Services can be particularly difficult to test, with the need for networking, a web container, multiple threads and transaction management creating extra complexity beyond your standard unit test.  In this article I demonstrate patterns designed to address this complexity while enabling complete testing of your REST Web Service stack.
+REST Web Services can be particularly difficult to test, with the need for networking, a web container, multiple threads and transaction management creating extra complexity beyond your standard unit test.  In this article I demonstrate patterns designed to address this complexity while enabling complete testing of your REST web service stack.
 
 The ideal web service unit test will use the same principles discussed in my "previous article":http://greensopinion.blogspot.com/2010/07/patterns-for-better-unit-testing-with.html:
 # clean database with mocked data so that we can reliably test specific scenarios
 # rollback to avoid side-effects after our test
 # in-memory database so that no environment setup is required
-In addition, we'll need to run a web container for our unit test.  To maintain a zero-setup test environment, we'll have our unit test start a web container for the purpose of running our web service.   By having each test start and stop the web container, tests become very simple to run, and we're guaranteed that our tests will have a clean environment with no external dependencies.
+In addition, we'll need to run a web container for our unit test.  To maintain a zero-setup test environment, we'll have our unit test start a web container for the purpose of running our web service.   By having each test start and stop the web container, tests become very simple to run and we're guaranteed that our tests will have a clean environment with no external dependencies.
 
 h2. Web Container
 
@@ -156,19 +156,19 @@ public class BlogServiceClientTest extends BlogServiceTest {
 	}
 }
 
-p. @BlogServiceClient@ is an implementation of @BlogService@ (our service interface) based on Spring's @RestTemplate@: it's a REST client for our service.
+p. You might be thinking "where are the ==<code>@Test</code>== methods?".  The beauty of our web service test is that it extends our service test: all of the test methods we were running before using direct method calls are now also run over our web service protocol.  By using inheritance, other than setup of our web service there's nothing else to do.  In other words, our service tests are run twice: once using Java method calls, and again over-the-wire using our web service.  This ensures that we see consistent behaviour in both modes of execution.
 
-You might be thinking "where are the ==<code>@Test</code>== methods?".  The beauty of our web service test is that it extends our service test: all of the test methods we were running before using direct method calls are now also run over our web service protocol.  By using inheritance, other than setup of our web service there's nothing else to do.  In other words, our service tests are run twice: once using Java method calls, and again over-the-wire using our web service.  This ensures that we see consistent behaviour in both modes of execution.
+@BlogServiceClient@ is an implementation of @BlogService@ (our service interface under test) based on Spring's @RestTemplate@.  It's a REST client for our service, implementing the same Java interface as our server-side service.  This enables us to substitute the REST client service implementation in our test.
 
 h2. Transaction Management and JPA
 
-Now that we've got a way to start our web service and run tests we're done, right?  Not quite: we still need to manage transactions and our test data.  This is somewhat more complicated with our web service: we want our unit test to have the following qualities:
+Now that we're able to start our web service and run tests we're done, right?  Not quite: we still need to manage transactions and our test data.  This is somewhat more complicated with our web service: recall that we want our unit test to have the following qualities:
 * clean database on startup
 * run in a transaction that rolls back after the test
 * mocks all of its own data
 Employing the techniques we've already established in "Patterns for Better Unit Testing with JPA":http://greensopinion.blogspot.com/2010/07/patterns-for-better-unit-testing-with.html helps, but is not quite enough.  
 
-Recall that we're invoking our service that's running in a web container.  The web container services incoming HTTP requests with threads in a thread pool.  Our service is pretty much guaranteed to be running on a thread independant from our unit test thread.  As a result it will be running in it's own transaction context.  There are two problems that arise from this:
+Our service implementation is running in a web container.  The web container services incoming HTTP requests with threads in a thread pool.  Our service is pretty much guaranteed to be running on a distinct thread, not the same thread as that running our unit test method.  As a result our service bean will be running in it's own transaction context.  There are two problems that arise from this:
 * our service won't be able to see the data we've mocked up in our test
 * our service method will commit its transaction
 Both of these things are undesirable.  To overcome this problem we'll apply a little trickery: we'll provide an entity manager that is shared by both the test thread and the web container thread servicing our HTTP requests, and we'll prevent any commit or rollback from occurring on that entity manager while it's in use in a unit test.  We do this by wrapping the entity manager factory in our test environment:
@@ -195,7 +195,7 @@ bc.
 		return new TestEntityManager(theEntityManager);
 	}
 
-It creates and returns a singleton entity manager instance.  This allows us to share a single entity manager between our unit test and the web container.  We also wrap the entity manager so that we can control it's lifecycle (we prevent @close()@) and it's transaction (we prevent @commit()@ and @rollback()@).
+It creates and returns a singleton entity manager instance.  This allows us to share a single entity manager between our unit test and the web container.  We also wrap the entity manager so that we can control it's lifecycle (we prevent @close()@) and that of it's transaction (we prevent @commit()@ and @rollback()@).
 
 While we know that the @EntityManager@ is not thread safe, it's okay to share it between threads providing that no two threads access it _at the same time_.  Since our REST client will block on any calls to the server, we're not at risk of concurrent access.
 
@@ -221,9 +221,9 @@ JPA domain objects are exposed by the service interface.  This helps in a few wa
 * It helps to reduce the amount of code that must be written
 However it has drawbacks:
 * It exposes the design of our domain, limiting our ability to change it in the future
-* Changes to the domain may inadvertently break the service interface
-* The service controller must be careful to expose shallow copies only
-This approach may be feasible for some projects, however others may find that they must create transfer objects to expose data via the service interface without exposing their domain implementation details.
+* Changes to the domain may inadvertently break the service interface for third-party clients
+* The service controller must be careful to expose shallow copies of our domain objects
+This approach may be feasible for some projects.  It's common to see transfer objects as well, which allows a service to be explicit about it's data model without exposing the domain implementation details.
 
 h3. Missing Functionality
 
