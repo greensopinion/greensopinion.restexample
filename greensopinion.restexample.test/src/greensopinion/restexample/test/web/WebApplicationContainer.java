@@ -142,6 +142,7 @@ public class WebApplicationContainer {
 			throw new IllegalStateException();
 		}
 		EmbeddedWebContextLoaderListener.clearContext();
+		winstoneLauncher.shutdown();
 		winstoneLauncher = null;
 	}
 	
