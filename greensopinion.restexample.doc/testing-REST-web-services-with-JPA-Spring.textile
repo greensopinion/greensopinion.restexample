@@ -77,12 +77,15 @@ public class WebApplicationContainer {
 					break;
 				}
 				if (x == maxRetries - 1) {
-					throw new IllegalStateException(String.format("Connection to localhost:%s failed.  Did the web container start up successfully?"));
+					throw new IllegalStateException(
+						String.format("Connection to localhost:%s failed."+
+							"  Did the web container start up successfully?"));
 				}
 				// wait and then try again
 				Thread.sleep(100L);
 			}
-			Logger.getLogger(WebApplicationContainer.class.getName()).info("Started web container at "+getBaseUrl());
+			Logger.getLogger(WebApplicationContainer.class.getName()).
+				info("Started web container at "+getBaseUrl());
 		} catch (Exception e) {
 			throw new IllegalStateException(e);
 		}
@@ -174,16 +177,17 @@ Our service implementation is running in a web container.  The web container ser
 Both of these things are undesirable.  To overcome this problem we'll apply a little trickery: we'll provide an entity manager that is shared by both the test thread and the web container thread servicing our HTTP requests, and we'll prevent any commit or rollback from occurring on that entity manager while it's in use in a unit test.  We do this by wrapping the entity manager factory in our test environment:
 
 bc. 
-	<bean class="greensopinion.restexample.test.jpa.TestEntityManagerFactory" 
-		id="blogDomain">
-		<property name="delegate">
-			<bean
-				class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
-				<property name="dataSource" ref="dataSource" />
-				<property name="persistenceXmlLocation" value="classpath*:/persistence-test.xml"/>
-			</bean>
-		</property>
-	</bean>
+<bean class="greensopinion.restexample.test.jpa.TestEntityManagerFactory" 
+	id="blogDomain">
+	<property name="delegate">
+		<bean
+			class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
+			<property name="dataSource" ref="dataSource" />
+			<property name="persistenceXmlLocation" 
+				value="classpath*:/persistence-test.xml"/>
+		</bean>
+	</property>
+</bean>
 
 Our @TestEntityManagerFactory@ employs the standard delegate pattern, with the exception that it changes the default behaviour of @createEntityManager()@:
 
